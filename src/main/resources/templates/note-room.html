@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Note Room</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.0/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+</head>
+<body class="bg-gray-100 text-gray-900">
+
+<div class="max-w-3xl mx-auto mt-10 p-4 bg-white rounded-2xl shadow-md"
+     th:attr="data-username=${username},data-group=${group}">
+
+    <h2 class="text-2xl font-bold mb-2">👤 <span th:text="${username}">User</span></h2>
+    <h3 class="text-xl font-semibold text-blue-600 mb-4">Group: <span th:text="${group}">Group</span></h3>
+
+    <div class="flex gap-2 mb-4">
+        <input id="noteInput" type="text" placeholder="Write your note..."
+               class="flex-1 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400" />
+        <button onclick="sendNote()"
+                class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">Send</button>
+    </div>
+
+    <form id="mediaForm" class="mb-4" enctype="multipart/form-data">
+        <input type="file" id="mediaInput" name="file" accept="image/*,video/*"
+               class="block w-full mb-2 p-2 border rounded-lg">
+        <button type="submit"
+                class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600">Upload Media</button>
+    </form>
+
+    <div id="notes" class="space-y-4 mt-6 overflow-y-auto max-h-[500px] pr-2"></div>
+</div>
+
+<script>
+    const container = document.querySelector('[data-username]');
+    const username = container.getAttribute('data-username');
+    const group = container.getAttribute('data-group');
+
+    let stompClient = null;
+
+    function connect() {
+        const socket = new SockJS('/ws');
+        stompClient = Stomp.over(socket);
+        stompClient.connect({}, function (frame) {
+            console.log('Connected: ' + frame);
+            stompClient.subscribe('/topic/notes/' + group, function (message) {
+                const data = JSON.parse(message.body);
+                displayNote(data);
+            });
+        });
+    }
+
+    function sendNote() {
+        const noteInput = document.getElementById('noteInput');
+        const note = noteInput.value.trim();
+        if (note !== "") {
+            stompClient.send("/app/note/" + group, {}, JSON.stringify({
+                username: username,
+                content: note,
+                groupName: group,
+                mediaUrl: ""
+            }));
+            noteInput.value = '';
+        }
+    }
+
+    function displayNote(data) {
+        const notesDiv = document.getElementById('notes');
+        const div = document.createElement('div');
+        div.className = "bg-gray-200 p-3 rounded-xl shadow";
+
+        let html = `<strong class="text-blue-800">${escapeHtml(data.username)}</strong>`;
+        if (data.content && data.content.trim() !== "") {
+            html += `: <span>${escapeHtml(data.content)}</span>`;
+        }
+
+        if (data.mediaUrl) {
+            const ext = data.mediaUrl.split('.').pop().toLowerCase();
+            if (['mp4', 'webm', 'ogg'].includes(ext)) {
+                html += `<br><video controls class="mt-2 rounded-lg w-full max-w-md"><source src="${data.mediaUrl}" type="video/${ext}"></video>`;
+            } else {
+                html += `<br><img src="${data.mediaUrl}" alt="Shared media" class="mt-2 rounded-lg max-w-xs border">`;
+            }
+        }
+
+        div.innerHTML = html;
+        notesDiv.appendChild(div);
+        notesDiv.scrollTop = notesDiv.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+    }
+
+    document.getElementById('mediaForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+        const fileInput = document.getElementById('mediaInput');
+        const file = fileInput.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        fetch('/upload', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.text())
+        .then(url => {
+            if (url.startsWith("/uploads/")) {
+                stompClient.send("/app/note/" + group, {}, JSON.stringify({
+                    username: username,
+                    content: "",
+                    groupName: group,
+                    mediaUrl: url
+                }));
+            } else {
+                alert("Upload failed: " + url);
+            }
+        })
+        .catch(error => {
+            console.error("Upload error:", error);
+            alert("Failed to upload media.");
+        });
+
+        fileInput.value = '';
+    });
+
+    document.getElementById('noteInput').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            sendNote();
+        }
+    });
+
+    window.onload = connect;
+</script>
+
+</body>
+</html>

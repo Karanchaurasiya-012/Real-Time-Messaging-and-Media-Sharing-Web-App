@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Ask DeepSeek AI</title>
+</head>
+<body>
+    <h1>Ai model</h1>
+    
+    <form th:action="@{/ask}" method="post">
+        <label for="question">Enter your question:</label>
+        <input type="text" id="question" name="question" required />
+        <button type="submit">Ask</button>
+    </form>
+
+    <div th:if="${question}">
+        <h3>Question:</h3>
+        <p th:text="${question}"></p>
+
+        <h3>Answer:</h3>
+        <p th:text="${answer}"></p>
+    </div>
+</body>
+</html>
