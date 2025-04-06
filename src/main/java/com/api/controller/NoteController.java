@@ -67,25 +67,4 @@ public class NoteController {
         System.out.println("Uploaded file: " + filePath.toAbsolutePath());
         return "/uploads/" + fileName;
     }
-
-    // Serve uploaded media
-    @GetMapping("/uploads/{filename:.+}")
-    @ResponseBody
-    public ResponseEntity<Resource> serveFile(@PathVariable String filename) {
-        try {
-            Path file = Paths.get(System.getProperty("user.dir"), UPLOAD_DIR).resolve(filename);
-            Resource resource = new UrlResource(file.toUri());
-
-            if (resource.exists() || resource.isReadable()) {
-                return ResponseEntity.ok()
-                        .header(HttpHeaders.CONTENT_DISPOSITION,
-                                "inline; filename=\"" + resource.getFilename() + "\"")
-                        .body(resource);
-            } else {
-                return ResponseEntity.notFound().build();
-            }
-        } catch (MalformedURLException e) {
-            return ResponseEntity.badRequest().build();
-        }
-    }
 }
